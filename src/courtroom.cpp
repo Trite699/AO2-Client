@@ -4486,7 +4486,7 @@ void Courtroom::chat_tick()
     msg_delay = text_crawl * message_display_mult[current_display_speed];
   }
 
-  if ((msg_delay <= 0 && tick_pos < f_message.size() - 1) || formatting_char)
+  if (!(tick_pos >= f_message.size()) && ((msg_delay <= 0 && tick_pos < f_message.size() - 1) || formatting_char))
   {
     {
       chat_tick_timer->start(0); // Don't bother rendering anything out as we're
