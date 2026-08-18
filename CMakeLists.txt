@@ -16,6 +16,10 @@ option(AO_ENABLE_DISCORD_RPC "Enable Discord Rich Presence" ON)
 
 find_package(QT NAMES Qt6)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets Concurrent WebSockets UiTools)
+if(ANDROID)
+  # Needed for private/qandroidextras_p.h (runtime storage permission requests)
+  find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
+endif()
 
 qt_add_executable(Attorney_Online
   src/aoapplication.cpp
@@ -144,6 +148,10 @@ target_link_libraries(Attorney_Online PRIVATE
 if(AO_ENABLE_DISCORD_RPC)
   target_compile_definitions(Attorney_Online PRIVATE AO_ENABLE_DISCORD_RPC)
   target_link_libraries(Attorney_Online PRIVATE discord-rpc)
+endif()
+
+if(ANDROID)
+  target_link_libraries(Attorney_Online PRIVATE Qt${QT_VERSION_MAJOR}::CorePrivate)
 endif()
 
 if(AO_BUILD_TESTS)
