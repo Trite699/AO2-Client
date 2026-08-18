@@ -245,3 +245,113 @@ jobs:
         with:
           name: Attorney_Online-Linux-AppImage
           path: Attorney_Online-AppImage.tar
+
+  build-android:
+    needs: formatting-check
+    runs-on: ubuntu-22.04
+    env:
+      ANDROID_ABI: arm64-v8a
+      QT_VERSION: 6.5.3
+    steps:
+      - uses: actions/checkout@master
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # A desktop Qt install is required alongside the Android one: Qt's
+      # cross-build tooling (androiddeployqt, moc/rcc host tools, etc.) needs
+      # a matching host Qt to run during the Android build.
+      - name: Install host Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'linux'
+          target: 'desktop'
+          arch: 'gcc_64'
+          dir: '${{ github.workspace }}/qt'
+          set-env: false
+          cache: true
+          cache-key-prefix: install-qt-action-host
+
+      - name: Install Qt for Android
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'linux'
+          target: 'android'
+          arch: 'android_arm64_v8a'
+          dir: '${{ github.workspace }}/qt'
+          modules: 'qtimageformats qtwebsockets'
+          cache: true
+          cache-key-prefix: install-qt-action-android
+
+      - name: Set up Android SDK/NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125"
+          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/26.1.10909125" >> "$GITHUB_ENV"
+
+      - name: Install Android BASS
+        shell: bash
+        run: |
+          mkdir -p "./lib/${ANDROID_ABI}"
+
+          curl http://www.un4seen.com/files/bass24-android.zip -o bass.zip
+          unzip -o bass.zip -d bass
+          cp ./bass/c/bass.h ./lib
+          cp "./bass/libs/${ANDROID_ABI}/libbass.so" "./lib/${ANDROID_ABI}/libbass.so"
+
+          curl http://www.un4seen.com/files/bassopus24-android.zip -o bassopus.zip
+          unzip -o bassopus.zip -d bass
+          cp ./bass/c/bassopus.h ./lib
+          cp "./bass/libs/${ANDROID_ABI}/libbassopus.so" "./lib/${ANDROID_ABI}/libbassopus.so"
+
+      - name: Clone Themes
+        uses: actions/checkout@master
+        with:
+          repository: AttorneyOnline/AO2-Themes
+          path: "bin/base/themes"
+
+      - name: Cleanup Themes Checkout
+        run: |
+          rm ./bin/base/themes/.gitignore
+          rm ./bin/base/themes/.gitattributes
+          rm -r ./bin/base/themes/.git
+
+      - name: Configure
+        env:
+          QT_HOST_PATH: '${{ github.workspace }}/qt/${{ env.QT_VERSION }}/gcc_64'
+        run: |
+          cmake -S . -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE="${ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI="${ANDROID_ABI}" \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/qt/${{ env.QT_VERSION }}/android_arm64_v8a" \
+            -DQT_HOST_PATH="${QT_HOST_PATH}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAO_BUILD_TESTS=OFF \
+            -DAO_ENABLE_DISCORD_RPC=OFF
+
+      - name: Build APK
+        run: |
+          cmake --build build-android --target apk --config Release
+
+      - name: Locate APK
+        id: locate_apk
+        run: |
+          apk_path=$(find build-android -name "*.apk" | head -n 1)
+          echo "Found APK: $apk_path"
+          echo "apk_path=$apk_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: Attorney_Online-Android-${{ env.ANDROID_ABI }}
+          path: ${{ steps.locate_apk.outputs.apk_path }}
