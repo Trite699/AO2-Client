@@ -327,13 +327,13 @@ jobs:
 
       - name: Configure
         env:
-          QT_HOST_PATH: '${{ github.workspace }}/qt/${{ env.QT_VERSION }}/gcc_64'
+          QT_HOST_PATH: '${{ github.workspace }}/qt/Qt/${{ env.QT_VERSION }}/gcc_64'
         run: |
           cmake -S . -B build-android \
             -DCMAKE_TOOLCHAIN_FILE="${ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI="${ANDROID_ABI}" \
             -DANDROID_PLATFORM=android-24 \
-            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/qt/${{ env.QT_VERSION }}/android_arm64_v8a" \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/qt/Qt/${{ env.QT_VERSION }}/android_arm64_v8a" \
             -DQT_HOST_PATH="${QT_HOST_PATH}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DAO_BUILD_TESTS=OFF \
