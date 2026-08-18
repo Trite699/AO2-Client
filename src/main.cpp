@@ -1,4 +1,3 @@
-
 #include "aoapplication.h"
 
 #include "courtroom.h"
@@ -12,6 +11,11 @@
 #include <QResource>
 #include <QTranslator>
 
+#ifdef ANDROID
+#include <QFuture>
+#include <private/qandroidextras_p.h>
+#endif
+
 int main(int argc, char *argv[])
 {
   qSetMessagePattern("%{type}: %{if-category}%{category}: %{endif}%{message}");
@@ -21,9 +25,16 @@ int main(int argc, char *argv[])
   QApplication app(argc, argv);
 
 #ifdef ANDROID
-  if (QtAndroid::checkPermission("android.permission.READ_EXTERNAL_STORAGE") == QtAndroid::PermissionResult::Denied)
+  // Qt5's QtAndroid::checkPermission()/requestPermissionsSync() were removed
+  // in Qt6. There's no public QPermission type for storage (it's
+  // deliberately manifest-only in that API), so this uses the private
+  // QtAndroidPrivate API instead, same as it's documented for Qt 6.5.x.
+  for (const QString &permission : {"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE"})
   {
-    QtAndroid::requestPermissionsSync({"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE"});
+    if (QtAndroidPrivate::checkPermission(permission).result() != QtAndroidPrivate::Authorized)
+    {
+      QtAndroidPrivate::requestPermission(permission).waitForFinished();
+    }
   }
 #endif
 
