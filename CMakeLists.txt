@@ -107,6 +107,14 @@ qt_add_executable(Attorney_Online
 
 set_target_properties(Attorney_Online PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
+if(ANDROID)
+  set_property(TARGET Attorney_Online PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
+  # Prebuilt BASS/BASSOPUS .so files are staged per-ABI by CI into lib/<ANDROID_ABI>/
+  set_property(TARGET Attorney_Online PROPERTY QT_ANDROID_EXTRA_LIBS
+    "${CMAKE_CURRENT_SOURCE_DIR}/lib/${ANDROID_ABI}/libbass.so"
+    "${CMAKE_CURRENT_SOURCE_DIR}/lib/${ANDROID_ABI}/libbassopus.so")
+endif()
+
 if(WIN32)
   if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set_property(TARGET Attorney_Online PROPERTY WIN32_EXECUTABLE true)
@@ -116,7 +124,11 @@ if(WIN32)
 endif()
 
 target_include_directories(Attorney_Online PRIVATE src lib)
-target_link_directories(Attorney_Online PRIVATE lib)
+if(ANDROID)
+  target_link_directories(Attorney_Online PRIVATE "lib/${ANDROID_ABI}")
+else()
+  target_link_directories(Attorney_Online PRIVATE lib)
+endif()
 target_link_libraries(Attorney_Online PRIVATE
   Qt${QT_VERSION_MAJOR}::Core
   Qt${QT_VERSION_MAJOR}::Gui
