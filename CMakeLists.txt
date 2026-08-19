@@ -1,163 +1,372 @@
-cmake_minimum_required(VERSION 3.7.0)
+# This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
+# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
+name: CI Build
 
-project(AttorneyOnline VERSION 2.11.0.0 LANGUAGES CXX C)
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+jobs:
+  formatting-check:
+    name: formatting-check
+    runs-on: ubuntu-latest
+    steps:
+     - uses: actions/checkout@v4
+     - name: Run clang-format style check for C++
+       uses: jidicula/clang-format-action@v4.12.0
+       with:
+         clang-format-version: '17'
+         check-path: 'src'
+         fallback-style: LLVM
 
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
+  build-windows:
+    needs: formatting-check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@master
+        with:
+          submodules: recursive
 
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.5.3
+          target: desktop
+          arch: win64_mingw
+          cache: true
+          cache-key-prefix: install-qt-action
+          modules: 'qtimageformats qtwebsockets'
 
-option(AO_BUILD_TESTS "Build test programs" ON)
-option(AO_ENABLE_DISCORD_RPC "Enable Discord Rich Presence" ON)
+      - name: Install Windows Discord RPC
+        shell: bash
+        run: |
+          curl -L https://github.com/discordapp/discord-rpc/releases/download/v3.4.0/discord-rpc-win.zip -o discord_rpc.zip
+          unzip discord_rpc.zip
+          cp ./discord-rpc/win64-dynamic/lib/discord-rpc.lib ./lib/
+          cp ./discord-rpc/win64-dynamic/bin/discord-rpc.dll ./bin/
+          cp ./discord-rpc/win64-dynamic/include/discord*.h ./lib/
 
-find_package(QT NAMES Qt6)
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets Concurrent WebSockets UiTools)
-if(ANDROID)
-  # Needed for private/qandroidextras_p.h (runtime storage permission requests)
-  find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
-endif()
+      - name: Install Windows BASS
+        shell: bash
+        run: |
+          curl http://www.un4seen.com/files/bass24.zip -o bass.zip
+          unzip -d bass -o bass.zip
+          cp ./bass/c/bass.h ./lib
+          cp ./bass/c/x64/bass.lib ./lib/
+          cp ./bass/x64/bass.dll ./bin/
 
-qt_add_executable(Attorney_Online
-  src/aoapplication.cpp
-  src/aoapplication.h
-  src/aoblipplayer.cpp
-  src/aoblipplayer.h
-  src/aobutton.cpp
-  src/aobutton.h
-  src/aocharbutton.cpp
-  src/aocharbutton.h
-  src/aoclocklabel.cpp
-  src/aoclocklabel.h
-  src/aoemotebutton.cpp
-  src/aoemotebutton.h
-  src/aoemotepreview.cpp
-  src/aoemotepreview.h
-  src/aoevidencebutton.cpp
-  src/aoevidencebutton.h
-  src/aoevidencedisplay.cpp
-  src/aoevidencedisplay.h
-  src/aoimage.cpp
-  src/aoimage.h
-  src/animationlayer.cpp
-  src/animationlayer.h
-  src/animationloader.h
-  src/animationloader.cpp
-  src/aomusicplayer.cpp
-  src/aomusicplayer.h
-  src/aopacket.cpp
-  src/aopacket.h
-  src/aosfxplayer.cpp
-  src/aosfxplayer.h
-  src/aotextarea.cpp
-  src/aotextarea.h
-  src/aotextboxwidgets.cpp
-  src/aotextboxwidgets.h
-  src/aoutils.cpp
-  src/aoutils.h
-  src/charselect.cpp
-  src/chatlogpiece.cpp
-  src/chatlogpiece.h
-  src/courtroom.cpp
-  src/courtroom.h
-  src/datatypes.h
-  src/debug_functions.cpp
-  src/debug_functions.h
-  src/demoserver.cpp
-  src/demoserver.h
-  src/discord_rich_presence.cpp
-  src/discord_rich_presence.h
-  src/emotes.cpp
-  src/eventfilters.cpp
-  src/eventfilters.h
-  src/evidence.cpp
-  src/file_functions.cpp
-  src/file_functions.h
-  src/gui_utils.h
-  src/hardware_functions.cpp
-  src/hardware_functions.h
-  src/lobby.cpp
-  src/lobby.h
-  src/main.cpp
-  src/network/websocketconnection.cpp
-  src/network/websocketconnection.h
-  src/networkmanager.cpp
-  src/networkmanager.h
-  src/options.cpp
-  src/options.h
-  src/packet_distribution.cpp
-  src/path_functions.cpp
-  src/scrolltext.cpp
-  src/scrolltext.h
-  src/serverdata.cpp
-  src/serverdata.h
-  src/text_file_functions.cpp
-  src/widgets/aooptionsdialog.cpp
-  src/widgets/aooptionsdialog.h
-  src/widgets/direct_connect_dialog.cpp
-  src/widgets/direct_connect_dialog.h
-  src/widgets/server_editor_dialog.cpp
-  src/widgets/server_editor_dialog.h
-  data.qrc
-  src/widgets/playerlistwidget.h src/widgets/playerlistwidget.cpp
-  src/widgets/moderator_dialog.h src/widgets/moderator_dialog.cpp
-  src/screenslidetimer.h src/screenslidetimer.cpp
-  src/moderation_functions.h src/moderation_functions.cpp
-  src/network/serverinfo.h src/network/serverinfo.cpp
-)
+          curl http://www.un4seen.com/files/bassopus24.zip -o bassopus.zip
+          unzip -d bass -o bassopus.zip
+          cp ./bass/c/bassopus.h ./lib
+          cp ./bass/c/x64/bassopus.lib ./lib/
+          cp ./bass/x64/bassopus.dll ./bin/
 
-set_target_properties(Attorney_Online PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
+      - name: Clone Apng plugin
+        uses: actions/checkout@master
+        with:
+          repository: jurplel/QtApng
+          path: ./qtapng
 
-if(ANDROID)
-  set_property(TARGET Attorney_Online PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
-  # Prebuilt BASS/BASSOPUS .so files are staged per-ABI by CI into lib/<ANDROID_ABI>/
-  set_property(TARGET Attorney_Online PROPERTY QT_ANDROID_EXTRA_LIBS
-    "${CMAKE_CURRENT_SOURCE_DIR}/lib/${ANDROID_ABI}/libbass.so"
-    "${CMAKE_CURRENT_SOURCE_DIR}/lib/${ANDROID_ABI}/libbassopus.so")
-endif()
+      - name: Build Apng plugin
+        run: |
+          cd ./qtapng
+          cmake . -G "MinGW Makefiles"
+          cmake --build . --config Release
+          mkdir -p ${{ github.workspace }}/bin/imageformats/
+          cp plugins/imageformats/qapng.dll ${{ github.workspace }}/bin/imageformats/qapng.dll
 
-if(WIN32)
-  if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set_property(TARGET Attorney_Online PROPERTY WIN32_EXECUTABLE true)
-    set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/data/logo-client.rc")
-    target_sources(Attorney_Online PRIVATE ${APP_ICON_RESOURCE_WINDOWS})
-  endif()
-endif()
+      - name: Build
+        run: |
+          cmake . -G "MinGW Makefiles" -D CMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release
 
-target_include_directories(Attorney_Online PRIVATE src lib)
-if(ANDROID)
-  target_link_directories(Attorney_Online PRIVATE "lib/${ANDROID_ABI}")
-else()
-  target_link_directories(Attorney_Online PRIVATE lib)
-endif()
-target_link_libraries(Attorney_Online PRIVATE
-  Qt${QT_VERSION_MAJOR}::Core
-  Qt${QT_VERSION_MAJOR}::Gui
-  Qt${QT_VERSION_MAJOR}::Network
-  Qt${QT_VERSION_MAJOR}::Widgets
-  Qt${QT_VERSION_MAJOR}::Concurrent
-  Qt${QT_VERSION_MAJOR}::WebSockets
-  Qt${QT_VERSION_MAJOR}::UiTools
-  bass
-  bassopus
-)
+      - name: Deploy Windows
+        working-directory: ${{github.workspace}}/bin/
+        shell: bash
+        run: |
+          windeployqt --no-quick-import --no-translations --no-compiler-runtime --no-opengl-sw ./Attorney_Online.exe
 
-if(AO_ENABLE_DISCORD_RPC)
-  target_compile_definitions(Attorney_Online PRIVATE AO_ENABLE_DISCORD_RPC)
-  target_link_libraries(Attorney_Online PRIVATE discord-rpc)
-endif()
+      - name: Clone Themes
+        uses: actions/checkout@master
+        with:
+          repository: AttorneyOnline/AO2-Themes
+          path: "bin/base/themes"
 
-if(ANDROID)
-  target_link_libraries(Attorney_Online PRIVATE Qt${QT_VERSION_MAJOR}::CorePrivate)
-endif()
+      - name: Cleanup Themes Checkout
+        run: |
+          rm ./bin/base/themes/.gitignore
+          rm ./bin/base/themes/.gitattributes
+          Remove-Item -Path "./bin/base/themes/.git" -Recurse -Force
 
-if(AO_BUILD_TESTS)
-  add_subdirectory(test)
-endif()
+      - name: Upload Artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: Attorney_Online-Windows
+          path: ${{github.workspace}}/bin
 
-set_target_properties(Attorney_Online PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_LIST_DIR}/bin>
-        RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_CURRENT_LIST_DIR}/bin>)
+  build-linux:
+    needs: formatting-check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@master
+        with:
+          submodules: recursive
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          aqtversion: '==3.1.*'
+          version: '6.5.3'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'gcc_64'
+          cache: true
+          cache-key-prefix: install-qt-action
+          modules: 'qtimageformats qtwebsockets'
+
+      - name: Install Linux Discord RPC
+        run: |
+          curl -L https://github.com/discordapp/discord-rpc/releases/download/v3.4.0/discord-rpc-linux.zip -o discord_rpc.zip
+          unzip discord_rpc.zip
+          cp ./discord-rpc/linux-dynamic/lib/libdiscord-rpc.so ./lib/
+          cp ./discord-rpc/linux-dynamic/lib/libdiscord-rpc.so ./bin/
+          cp ./discord-rpc/linux-dynamic/include/discord*.h ./src/
+
+      - name: Install Linux BASS
+        run: |
+          curl http://www.un4seen.com/files/bass24-linux.zip -o bass.zip
+          unzip -d bass -o bass.zip
+          cp ./bass/c/bass.h ./lib
+          cp ./bass/libs/x86_64/libbass.so ./lib/
+          cp ./bass/libs/x86_64/libbass.so ./bin/
+
+          curl http://www.un4seen.com/files/bassopus24-linux.zip -o bassopus.zip
+          unzip -d bass -o bassopus.zip
+          cp ./bass/c/bassopus.h ./lib
+          cp ./bass/libs/x86_64/libbassopus.so ./lib/
+          cp ./bass/libs/x86_64/libbassopus.so ./bin/
+
+      - name: Clone Apng plugin
+        uses: actions/checkout@master
+        with:
+          repository: jurplel/QtApng
+          path: ./qtapng
+
+      - name: Build Apng plugin
+        run: |
+          cd ./qtapng
+          cmake . -D CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE="${{ github.workspace }}/bin/imageformats/"
+          cmake --build . --config Release
+
+          # install plugin
+          cp plugins/imageformats/libqapng.so ${QT_ROOT_DIR}/plugins/imageformats
+
+      - name: Build
+        run: |
+          cmake .
+          cmake --build . --config Release
+
+      - name: Clone Themes
+        uses: actions/checkout@master
+        with:
+          repository: AttorneyOnline/AO2-Themes
+          path: "bin/base/themes"
+
+      - name: Cleanup Themes Checkout
+        run: |
+          rm ./bin/base/themes/.gitignore
+          rm ./bin/base/themes/.gitattributes
+          rm -r ./bin/base/themes/.git
+
+      - name: Deploy Linux
+        shell: bash
+        run: |
+          cd ${{ github.workspace }}/bin
+          mkdir ./imageformats
+          cp ../qtapng/plugins/imageformats/libqapng.so ./imageformats
+          cp ../data/logo-client.png ./icon.png
+          cp ../README_LINUX.md .
+          cp ../scripts/DYNAMIC_INSTALL.sh ./INSTALL.sh
+          chmod +x INSTALL.sh
+          chmod +x Attorney_Online
+
+          patchelf --add-rpath . Attorney_Online
+
+          cd ..
+          tar --transform='flags=r;s|bin|Attorney Online|' -cvf Attorney_Online-Dynamic.tar bin
+
+      - name: Create AppImage
+        shell: bash
+        run: |
+          # necessary, apparently
+          sudo apt install libxcb-cursor0
+          # from https://github.com/probonopd/go-appimage/blob/master/src/appimagetool/README.md
+          wget -c https://github.com/$(wget -q https://github.com/probonopd/go-appimage/releases/expanded_assets/continuous -O - | grep "appimagetool-.*-x86_64.AppImage" | head -n 1 | cut -d '"' -f 2)
+          mv appimagetool-*-x86_64.AppImage appimagetool
+          chmod +x appimagetool
+
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/lib/plugins/imageformats
+          mkdir -p AppDir/usr/share/applications
+
+          cp bin/Attorney_Online AppDir/usr/bin
+          cp bin/lib*.so AppDir/usr/lib
+          cp scripts/Attorney_Online.desktop AppDir/usr/share/applications
+          cp data/logo-client.png AppDir/Attorney_Online.png
+
+          GIT_SHORT_SHA="${GITHUB_SHA::8}"
+          QTDIR=${QT_ROOT_DIR} ./appimagetool deploy AppDir/usr/share/applications/Attorney_Online.desktop
+          ARCH=x86_64 VERSION=${GIT_SHORT_SHA} ./appimagetool AppDir
+
+      - name: Deploy AppImage
+        shell: bash
+        run: |
+          mkdir bin-appimage
+          cp -r bin/base bin-appimage
+          cp data/logo-client.png bin-appimage/icon.png
+          cp README_LINUX.md bin-appimage
+          cp scripts/APPIMAGE_INSTALL.sh bin-appimage/INSTALL.sh
+          cp Attorney_Online-*-x86_64.AppImage bin-appimage
+          chmod +x bin-appimage/INSTALL.sh
+          chmod +x bin-appimage/Attorney_Online-*-x86_64.AppImage
+
+          tar --transform='flags=r;s|bin-appimage|Attorney Online|' -cvf Attorney_Online-AppImage.tar bin-appimage
+
+      - name: Upload Dynamic Artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: Attorney_Online-Linux-Dynamic
+          path: Attorney_Online-Dynamic.tar
+
+      - name: Upload AppImage Artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: Attorney_Online-Linux-AppImage
+          path: Attorney_Online-AppImage.tar
+
+  build-android:
+    needs: formatting-check
+    runs-on: ubuntu-22.04
+    env:
+      ANDROID_ABI: arm64-v8a
+      QT_VERSION: 6.5.3
+    steps:
+      - uses: actions/checkout@master
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # A desktop Qt install is required alongside the Android one: Qt's
+      # cross-build tooling (androiddeployqt, moc/rcc host tools, etc.) needs
+      # a matching host Qt to run during the Android build.
+      - name: Install host Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'linux'
+          target: 'desktop'
+          arch: 'gcc_64'
+          dir: '${{ github.workspace }}/qt'
+          set-env: false
+          cache: true
+          cache-key-prefix: install-qt-action-host
+
+      - name: Install Qt for Android
+        uses: jurplel/install-qt-action@v4
+        with:
+          aqtversion: '==3.1.*'
+          version: ${{ env.QT_VERSION }}
+          host: 'linux'
+          target: 'android'
+          arch: 'android_arm64_v8a'
+          dir: '${{ github.workspace }}/qt'
+          modules: 'qtimageformats qtwebsockets'
+          # AO2-Client needs private/qandroidextras_p.h (runtime storage
+          # permission requests) on Android, which lives in the CorePrivate
+          # module. The default Android archive doesn't ship private
+          # headers/cmake configs, so pass aqtinstall's --internal flag
+          # through to fetch them.
+          extra: '--internal'
+          cache: true
+          # Bumped cache key suffix so a stale cache from before --internal
+          # was added doesn't get restored without the private headers.
+          cache-key-prefix: install-qt-action-android-internal
+
+      - name: Set up Android SDK/NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          # Qt 6.5.3's official prebuilt Android libraries are built against
+          # NDK r25b. Using a different NDK risks "missing symbol" link
+          # errors, so pin this to match.
+          echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.1.8937393"
+          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/25.1.8937393" >> "$GITHUB_ENV"
+
+      - name: Install Android BASS
+        shell: bash
+        run: |
+          mkdir -p "./lib/${ANDROID_ABI}"
+
+          curl http://www.un4seen.com/files/bass24-android.zip -o bass.zip
+          unzip -o bass.zip -d bass
+          cp ./bass/c/bass.h ./lib
+          cp "./bass/libs/${ANDROID_ABI}/libbass.so" "./lib/${ANDROID_ABI}/libbass.so"
+
+          curl http://www.un4seen.com/files/bassopus24-android.zip -o bassopus.zip
+          unzip -o bassopus.zip -d bass
+          cp ./bass/c/bassopus.h ./lib
+          cp "./bass/libs/${ANDROID_ABI}/libbassopus.so" "./lib/${ANDROID_ABI}/libbassopus.so"
+
+      - name: Clone Themes
+        uses: actions/checkout@master
+        with:
+          repository: AttorneyOnline/AO2-Themes
+          path: "bin/base/themes"
+
+      - name: Cleanup Themes Checkout
+        run: |
+          rm ./bin/base/themes/.gitignore
+          rm ./bin/base/themes/.gitattributes
+          rm -r ./bin/base/themes/.git
+
+      - name: Configure
+        env:
+          QT_HOST_PATH: '${{ github.workspace }}/qt/Qt/${{ env.QT_VERSION }}/gcc_64'
+        run: |
+          # Use the Android Qt kit's own qt-cmake wrapper rather than hand-
+          # specifying the NDK toolchain file/ABI/platform ourselves: it
+          # already knows the correct settings for the specific Qt build
+          # we installed, which avoids NDK/ABI/platform mismatches.
+          "${{ github.workspace }}/qt/Qt/${{ env.QT_VERSION }}/android_arm64_v8a/bin/qt-cmake" \
+            -S . -B build-android \
+            -DANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" \
+            -DANDROID_NDK_ROOT="${ANDROID_NDK_ROOT}" \
+            -DQT_HOST_PATH="${QT_HOST_PATH}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAO_BUILD_TESTS=OFF \
+            -DAO_ENABLE_DISCORD_RPC=OFF
+
+      - name: Build APK
+        run: |
+          cmake --build build-android --target apk --config Release
+
+      - name: Locate APK
+        id: locate_apk
+        run: |
+          apk_path=$(find build-android -name "*.apk" | head -n 1)
+          echo "Found APK: $apk_path"
+          echo "apk_path=$apk_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: Attorney_Online-Android-${{ env.ANDROID_ABI }}
+          path: ${{ steps.locate_apk.outputs.apk_path }}
